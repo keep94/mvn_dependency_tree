@@ -239,7 +239,7 @@ func (db VersionDB) Versions() []Version {
 	return result
 }
 
-func ReadLibraries(path string) ([]Library, error) {
+func ReadLibrariesFile(path string) ([]Library, error) {
 	var result []Library
 	if err := readCsvFile(path, (*libraryList)(&result)); err != nil {
 		return nil, err
@@ -247,7 +247,7 @@ func ReadLibraries(path string) ([]Library, error) {
 	return result, nil
 }
 
-func ReadVersions(path string) ([]Version, error) {
+func ReadVersionsFile(path string) ([]Version, error) {
 	var result []Version
 	if err := readCsvFile(path, (*versionList)(&result)); err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func ReadVersions(path string) ([]Version, error) {
 	return result, nil
 }
 
-func ReadDependencies(path string) ([]Dependency, error) {
+func ReadDependenciesFile(path string) ([]Dependency, error) {
 	var result []Dependency
 	if err := readCsvFile(path, (*dependencyList)(&result)); err != nil {
 		return nil, err
@@ -263,19 +263,19 @@ func ReadDependencies(path string) ([]Dependency, error) {
 	return result, nil
 }
 
-func WriteLibraries(path string, libraries []Library) error {
+func WriteLibrariesFile(path string, libraries []Library) error {
 	return writeCsvFile(path, libraryList(libraries))
 }
 
-func WriteVersions(path string, versions []Version) error {
+func WriteVersionsFile(path string, versions []Version) error {
 	return writeCsvFile(path, versionList(versions))
 }
 
-func WriteDependencies(path string, dependencies []Dependency) error {
+func WriteDependenciesFile(path string, dependencies []Dependency) error {
 	return writeCsvFile(path, dependencyList(dependencies))
 }
 
-func WriteDependenciesStream(w io.Writer, dependencies []Dependency) error {
+func WriteDependencies(w io.Writer, dependencies []Dependency) error {
 	return writeCsv(w, dependencyList(dependencies))
 }
 

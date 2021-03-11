@@ -155,13 +155,13 @@ func main() {
 	var versions []mvn.Version
 	var err error
 	if fLibraries != "" {
-		libraries, err = mvn.ReadLibraries(fLibraries)
+		libraries, err = mvn.ReadLibrariesFile(fLibraries)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 	if fVersions != "" {
-		versions, err = mvn.ReadVersions(fVersions)
+		versions, err = mvn.ReadVersionsFile(fVersions)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -189,7 +189,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := mvn.WriteDependenciesStream(
+	if err := mvn.WriteDependencies(
 		outf,
 		buildDependencyRows(
 			dependencies,

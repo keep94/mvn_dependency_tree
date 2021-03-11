@@ -26,14 +26,14 @@ func main() {
 	var err error
 	var libraries []mvn.Library
 	if fLibraryIn != "" {
-		libraries, err = mvn.ReadLibraries(fLibraryIn)
+		libraries, err = mvn.ReadLibrariesFile(fLibraryIn)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 	var versions []mvn.Version
 	if fVersionIn != "" {
-		versions, err = mvn.ReadVersions(fVersionIn)
+		versions, err = mvn.ReadVersionsFile(fVersionIn)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -41,7 +41,7 @@ func main() {
 	libraryDB := mvn.NewLibraryDB(libraries)
 	versionDB := mvn.NewVersionDB(versions)
 	for _, dependencyFile := range flag.Args() {
-		dependencies, err := mvn.ReadDependencies(dependencyFile)
+		dependencies, err := mvn.ReadDependenciesFile(dependencyFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -52,11 +52,11 @@ func main() {
 			log.Fatalf("Error processing %s: %v", dependencyFile, err)
 		}
 	}
-	err = mvn.WriteLibraries(fLibraryOut, libraryDB.Libraries())
+	err = mvn.WriteLibrariesFile(fLibraryOut, libraryDB.Libraries())
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = mvn.WriteVersions(fVersionOut, versionDB.Versions())
+	err = mvn.WriteVersionsFile(fVersionOut, versionDB.Versions())
 	if err != nil {
 		log.Fatal(err)
 	}
