@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -10,12 +9,15 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	mvn "github.com/keep94/mvn_dependency_tree"
 )
 
 var (
 	fTreeFile            string
 	fDirectDependencyCsv string
-	fStore               string
+	fLibraries           string
+	fVersions            string
 )
 
 type entryType struct {
@@ -110,154 +112,62 @@ func stringsToDependencies(strs []string) ([]dependencyType, error) {
 	return result, nil
 }
 
-type dependencyRowType struct {
-	Name       string
-	Version    string
-	Date       string
-	Latest     string
-	LatestDate string
-}
-
-func readDependencies(r io.Reader) ([]dependencyRowType, error) {
-	csvReader := csv.NewReader(r)
-	csvReader.ReuseRecord = true
-	// Read title line
-	_, err := csvReader.Read()
-	if err != nil {
-		return nil, err
-	}
-	var result []dependencyRowType
-	record, err := csvReader.Read()
-	for err == nil {
-		result = append(
-			result,
-			dependencyRowType{
-				Name:       record[0],
-				Version:    record[1],
-				Date:       record[2],
-				Latest:     record[3],
-				LatestDate: record[4],
-			})
-		record, err = csvReader.Read()
-	}
-	if err == io.EOF {
-		return result, nil
-	}
-	return nil, err
-}
-
-type nameVersionType struct {
-	Name    string
-	Version string
-}
-
-type versionStoreType struct {
-	dates          map[nameVersionType]string
-	latestVersions map[string]string
-}
-
-func buildVersionStore(rows []dependencyRowType) *versionStoreType {
-	result := &versionStoreType{
-		dates:          make(map[nameVersionType]string),
-		latestVersions: make(map[string]string)}
-	for _, row := range rows {
-		if row.Name == "" {
-			continue
-		}
-		if row.Version != "" && row.Date != "" {
-			result.dates[nameVersionType{row.Name, row.Version}] = row.Date
-		}
-		if row.Latest != "" && row.LatestDate != "" {
-			result.dates[nameVersionType{row.Name, row.Latest}] = row.LatestDate
-		}
-		if row.Latest != "" {
-			result.latestVersions[row.Name] = row.Latest
-		}
-	}
-	return result
-}
-
-func (s *versionStoreType) Date(name, version string) string {
-	return s.dates[nameVersionType{name, version}]
-}
-
-func (s *versionStoreType) LatestVersion(name string) string {
-	return s.latestVersions[name]
-}
-
-func readVersionStore(path string) (
-	result *versionStoreType, err error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	rows, err := readDependencies(f)
-	if err != nil {
-		return
-	}
-	result = buildVersionStore(rows)
-	return
-}
-
 func buildDependencyRows(
 	dependencies []dependencyType,
-	store *versionStoreType) []dependencyRowType {
-	var lastName string
-	var lastVersion string
-	var result []dependencyRowType
+	libraries mvn.LibraryDB,
+	versions mvn.VersionDB) []mvn.Dependency {
+	var lastKey mvn.VersionKey
+	var result []mvn.Dependency
 	for _, d := range dependencies {
-		var row dependencyRowType
+		var row mvn.Dependency
 		row.Name = fmt.Sprintf("%s:%s", d.Group, d.Artifact)
 		row.Version = d.Version
-		if row.Name == lastName && row.Version == lastVersion {
+		if row.VersionKey == lastKey {
 			continue
 		}
-		if store != nil {
-			row.Date = store.Date(row.Name, row.Version)
-			row.Latest = store.LatestVersion(row.Name)
-			row.LatestDate = store.Date(row.Name, row.Latest)
-		}
+		row.Date = versions.Date(row.Name, row.Version)
+		library := libraries[row.Name]
+		row.Latest = library.Latest
+		row.LatestDate = versions.Date(row.Name, row.Latest)
+		row.NewLocation = library.NewLocation
+		row.Description = library.Description
 		result = append(result, row)
-		lastName = row.Name
-		lastVersion = row.Version
+		lastKey = row.VersionKey
 	}
 	return result
 }
 
-func writeDependencies(w io.Writer, rows []dependencyRowType) error {
-	csvWriter := csv.NewWriter(w)
-	csvWriter.Write([]string{
-		"library", "version", "date", "latest", "latest_date"})
-	if err := csvWriter.Error(); err != nil {
-		return err
+func scanDependencyFile(f io.Reader) ([]dependencyType, error) {
+	scanner := bufio.NewScanner(f)
+	dependencyScanner := newDependencyScannerType()
+	for scanner.Scan() {
+		dependencyScanner.Scan(scanner.Text())
 	}
-	var csvLine [5]string
-	for _, row := range rows {
-		csvLine[0] = row.Name
-		csvLine[1] = row.Version
-		csvLine[2] = row.Date
-		csvLine[3] = row.Latest
-		csvLine[4] = row.LatestDate
-		csvWriter.Write(csvLine[:])
-		if err := csvWriter.Error(); err != nil {
-			return err
-		}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
-	csvWriter.Flush()
-	return csvWriter.Error()
+	return stringsToDependencies(dependencyScanner.Dependencies())
 }
 
 func main() {
 	flag.Parse()
-	var store *versionStoreType
+	var libraries []mvn.Library
+	var versions []mvn.Version
 	var err error
-	if fStore != "" {
-		store, err = readVersionStore(fStore)
+	if fLibraries != "" {
+		libraries, err = mvn.ReadLibraries(fLibraries)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+	if fVersions != "" {
+		versions, err = mvn.ReadVersions(fVersions)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	libraryDB := mvn.NewLibraryDB(libraries)
+	versionDB := mvn.NewVersionDB(versions)
 	f := os.Stdin
 	if fTreeFile != "" {
 		f, err = os.Open(fTreeFile)
@@ -275,21 +185,16 @@ func main() {
 		}
 		defer outf.Close()
 	}
-	scanner := bufio.NewScanner(f)
-	dependencyScanner := newDependencyScannerType()
-	for scanner.Scan() {
-		dependencyScanner.Scan(scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-	dependencies, err := stringsToDependencies(
-		dependencyScanner.Dependencies())
+	dependencies, err := scanDependencyFile(f)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := writeDependencies(
-		outf, buildDependencyRows(dependencies, store)); err != nil {
+	if err := mvn.WriteDependenciesStream(
+		outf,
+		buildDependencyRows(
+			dependencies,
+			libraryDB,
+			versionDB)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -303,5 +208,7 @@ func init() {
 	flag.StringVar(
 		&fDirectDependencyCsv, "csv", "", "Direct dependency csv file")
 	flag.StringVar(
-		&fStore, "store", "", "Previous CSV file with versions")
+		&fLibraries, "lib", "", "Library CSV File")
+	flag.StringVar(
+		&fVersions, "ver", "", "Version CSV File")
 }

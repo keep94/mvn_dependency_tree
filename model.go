@@ -192,6 +192,11 @@ func NewVersionDB(versions []Version) VersionDB {
 	return result
 }
 
+func (db VersionDB) Date(name, version string) string {
+	result := db[VersionKey{name, version}]
+	return result.Date
+}
+
 func (db VersionDB) Merge(d *Dependency) error {
 	if err := db.mergeOne(d.VersionKey, d.Date); err != nil {
 		return err
@@ -268,6 +273,10 @@ func WriteVersions(path string, versions []Version) error {
 
 func WriteDependencies(path string, dependencies []Dependency) error {
 	return writeCsvFile(path, dependencyList(dependencies))
+}
+
+func WriteDependenciesStream(w io.Writer, dependencies []Dependency) error {
+	return writeCsv(w, dependencyList(dependencies))
 }
 
 type Merger interface {
