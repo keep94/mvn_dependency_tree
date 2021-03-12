@@ -225,8 +225,13 @@ func writeCsvFile(path string, aSlice interface{}) error {
 }
 
 func writeCsv(w io.Writer, aSlice interface{}) error {
-	encoder := csvutil.NewEncoder(csv.NewWriter(w))
-	return encoder.Encode(aSlice)
+	writer := csv.NewWriter(w)
+	encoder := csvutil.NewEncoder(writer)
+	if err := encoder.Encode(aSlice); err != nil {
+		return err
+	}
+	writer.Flush()
+	return writer.Error()
 }
 
 func replace(keyName, fieldName, value string, replace *string) error {
